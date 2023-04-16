@@ -27,6 +27,12 @@ For macOS and Linux, you can run the following command:
 curl -sSL https://install.python-poetry.org | bash
 ```
 
+For Windows, you can use PowerShell to install Poetry:
+
+```powershell
+(Invoke-WebRequest -Uri https://install.python-poetry.org/install.ps1 -UseBasicParsing).Content | Invoke-Expression
+```
+
 ## Project Setup
 
 1. Clone this repository or download the project files.
@@ -36,6 +42,12 @@ curl -sSL https://install.python-poetry.org | bash
 3. Run the following command to install the project's dependencies:
 
 ```bash
+poetry install
+```
+
+For Windows,
+
+```powershell
 poetry install
 ```
 
@@ -53,6 +65,22 @@ To run the project, use the following command in the terminal or command prompt:
 
 ```bash
 poetry run python crawler.py
+```
+
+For Windows:
+
+Activate the Poetry virtual environment:
+
+```powershell
+poetry shell
+```
+
+This command will create a new PowerShell session with the virtual environment activated.
+
+Run the main script:
+
+```powershell
+python crawler.py
 ```
 
 This command will execute the main script, which will search for the specified item IDs and reference queries in MercadoLibre Argentina, scroll through multiple pages of search results, and display the position and title of the items when found.
