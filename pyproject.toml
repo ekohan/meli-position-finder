@@ -1,10 +1,9 @@
 [tool.poetry]
-name = "posicion-organica"
+name = "meli-position-finder"
 version = "0.1.0"
 description = ""
-authors = ["Your Name <you@example.com>"]
+authors = ["Eric Kohan <ekohan@gmail.com>"]
 readme = "README.md"
-packages = [{include = "posicion_organica"}]
 
 [tool.poetry.dependencies]
 python = "^3.11"
