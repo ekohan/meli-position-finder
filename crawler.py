@@ -1,59 +1,84 @@
 import requests
 import csv
 from config import api_key, pairs, output_type  # Import the required variables from config.py
+from pathlib import Path
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 
 country_code = 'MLA'  
 
-def find_matching_items(item_id, reference_query, max_pages=10, results_per_page=50):
-    page = 0
-    found = False
-    total_results_iterated = 0
+def save_to_csv(item_id, reference_query, found, position, title, filename="output.csv"):
+    file_exists = Path(filename).is_file()
 
-    while not found and page < max_pages:
-        offset = page * results_per_page
-        url = f'https://api.mercadolibre.com/sites/{country_code}/search?q={reference_query}&access_token={api_key}&limit={results_per_page}&offset={offset}'
-        response = requests.get(url)
+    with open(filename, mode='a', newline='', encoding='utf-8') as csvfile:
+        fieldnames = ['item_id', 'reference_query', 'found', 'position', 'title']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
-        if response.status_code == 200:
-            data = response.json()
-            results = data['results']
-            total_results_iterated += len(results)
+        if not file_exists:
+            writer.writeheader()
 
-            print(f"Searching for {item_id} using query '{reference_query}'... Page {page + 1} of {max_pages} ({total_results_iterated} results iterated so far)")
+        writer.writerow({
+            'item_id': item_id,
+            'reference_query': reference_query,
+            'found': found,
+            'position': position,
+            'title': title,
+        })
 
-            for index, result in enumerate(results):
-                if result['id'] == item_id:
+def setup_session(retries=3, backoff_factor=0.3, timeout=5):
+    session = requests.Session()
+    
+    retry = Retry(
+        total=retries,
+        backoff_factor=backoff_factor,
+        status_forcelist=[429, 500, 502, 503, 504],
+        allowed_methods=["HEAD", "GET", "OPTIONS"]
+    )
+    
+    adapter = HTTPAdapter(max_retries=retry)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    
+    session.timeout = timeout
+    
+    return session
+
+def find_matching_items(api_key, pairs, output_type='screen'):
+    session = setup_session()
+
+    for index, pair in enumerate(pairs, start=1):
+        item_id, reference_query = pair
+
+        print(f"Processing pair {index} of {len(pairs)}: Item ID {item_id}, Reference Query '{reference_query}'")
+
+        search_url = f"https://api.mercadolibre.com/sites/MLA/search?search_type=scan&q={reference_query}"
+        headers = {"Authorization": f"Bearer {api_key}"}
+
+        has_next_page = True
+        found = False
+        while has_next_page:
+            response = session.get(search_url, headers=headers)
+            results = response.json()
+
+            items = results["results"]
+
+            for position, item in enumerate(items):
+                if item["id"] == item_id:
                     found = True
-                    break
+                    if output_type == "screen":
+                        print(f"{position + 1}: {item['title']}")
+                    elif output_type == "csv":
+                        save_to_csv(item_id, reference_query, found, position + 1, item['title'])
 
-            page += 1
-        else:
-            print(f"Error: Unable to fetch data. Status code {response.status_code}")
-            break
+            has_next_page = "next" in results["paging"]
+            if has_next_page:
+                search_url = results["paging"]["next"]
 
-    if not found:
-        print(f"No match found for item_id '{item_id}'. Iterated over {total_results_iterated} results.")
-        
-    return found, offset + index + 1 if found else None, result['title'] if found else None
+        if not found:
+            if output_type == "screen":
+                print(f"No match found for item_id '{item_id}'.")
+            elif output_type == "csv":
+                save_to_csv(item_id, reference_query, found, None, None)
 
-results_list = []
-for item_id, reference_query in pairs:
-    found, position, title = find_matching_items(item_id, reference_query)
-    results_list.append((item_id, reference_query, found, position, title))
 
-if output_type == 'csv':
-    with open('output.csv', 'w', newline='', encoding='utf-8') as csvfile:
-        csv_writer = csv.writer(csvfile)
-        csv_writer.writerow(['Item ID', 'Reference Query', 'Found', 'Position', 'Title'])
-        for result in results_list:
-            csv_writer.writerow(result)
-else:  # Output to screen
-    for result in results_list:
-        print(f"Item ID: {result[0]}")
-        print(f"Reference Query: {result[1]}")
-        if result[2]:
-            print(f"Position: {result[3]}")
-            print(f"Title: {result[4]}")
-        else:
-            print("Item not found")
-        print('-' * 80)
+find_matching_items(api_key, pairs, output_type)
